@@ -19,27 +19,39 @@ jobs:
           echo "${{ secrets.EC2_KEY }}" > ~/DjangoCDKey.pem
           chmod 600 ~/DjangoCDKey.pem
 
+      - name: Install rsync
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rsync
+
       - name: Deploy Code
         shell: bash
         run: |
           echo "Deploying application to EC2..."
 
-          # Copy complete project to EC2
-          scp \
-            -o StrictHostKeyChecking=no \
-            -i ~/DjangoCDKey.pem \
-            -r ./* \
+          rsync -avz \
+            --delete \
+            --exclude='.git/' \
+            --exclude='__pycache__/' \
+            --exclude='*.pyc' \
+            --exclude='*.pyo' \
+            --exclude='db.sqlite3' \
+            -e "ssh -o StrictHostKeyChecking=no -i ~/DjangoCDKey.pem" \
+            ./ \
             "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/Django_Project/"
 
-          # SSH into EC2 and deploy
           ssh \
             -o StrictHostKeyChecking=no \
             -i ~/DjangoCDKey.pem \
-            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" << 'EOF'
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" << EOF
 
           set -e
 
           cd /home/${{ secrets.EC2_USER }}/Django_Project
+
+          echo "Fixing project ownership..."
+          sudo chown -R ubuntu:ubuntu .
 
           echo "Stopping existing containers..."
           docker compose down
