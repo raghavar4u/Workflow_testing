@@ -10,23 +10,46 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-    - name: Set Up SSH Key
-      shell: bash
-      run: |
-        echo "${{ secrets.EC2_KEY }}" > ~/DjangoCDKey.pem
-        chmod 400 ~/DjangoCDKey.pem
+      - name: Set Up SSH Key
+        shell: bash
+        run: |
+          echo "${{ secrets.EC2_KEY }}" > ~/DjangoCDKey.pem
+          chmod 600 ~/DjangoCDKey.pem
 
-    - name: Deploy Code
-      shell: bash
-      run: |
-        # Copy all project files to the EC2 instance
-        scp -o StrictHostKeyChecking=no -i ~/DjangoCDKey.pem -r ./myapp/* ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/Django_Project/
-        
-        # SSH into the EC2 instance and deploy
-        ssh -o StrictHostKeyChecking=no -i ~/DjangoCDKey.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "
-          cd /home/${{ secrets.EC2_USER }}/Django_Project &&
-          docker-compose up --build -d
-        "
+      - name: Deploy Code
+        shell: bash
+        run: |
+          echo "Deploying application to EC2..."
+
+          # Copy complete project to EC2
+          scp \
+            -o StrictHostKeyChecking=no \
+            -i ~/DjangoCDKey.pem \
+            -r ./* \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/Django_Project/"
+
+          # SSH into EC2 and deploy
+          ssh \
+            -o StrictHostKeyChecking=no \
+            -i ~/DjangoCDKey.pem \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" << 'EOF'
+
+          set -e
+
+          cd /home/${{ secrets.EC2_USER }}/Django_Project
+
+          echo "Stopping existing containers..."
+          docker compose down
+
+          echo "Building and starting containers..."
+          docker compose up --build -d
+
+          echo "Checking container status..."
+          docker compose ps
+
+          echo "Deployment completed successfully!"
+
+          EOF
